@@ -23,7 +23,7 @@ func main() {
 	fmt.Printf("Starting load tests on %s with %d requests and %d concurrent calls\n", *url, *requests, *concurrency)
 
 	startTime := time.Now()
-	successfulRequests, statusCodeCount := doLoadTest(*url, *requests, *concurrency)
+	successfulRequests, statusCodeCount, otherStatusCodes := doLoadTest(*url, *requests, *concurrency)
 	totalTime := time.Since(startTime)
 
 	fmt.Printf("\nLoad Test Report:\n")
@@ -34,13 +34,18 @@ func main() {
 	for code, count := range statusCodeCount {
 		fmt.Printf("Status %d: %d\n", code, count)
 	}
+	fmt.Println("Other Status Codes:")
+	for code, count := range otherStatusCodes {
+		fmt.Printf("Status %d: %d\n", code, count)
+	}
 }
 
-func doLoadTest(url string, requests, concurrency int) (int, map[int]int) {
+func doLoadTest(url string, requests, concurrency int) (int, map[int]int, map[int]int) {
 	var (
-		wg               sync.WaitGroup
+		wg                 sync.WaitGroup
 		successfulRequests int
-		statusCodeCount     = make(map[int]int)
+		statusCodeCount    = make(map[int]int)
+		otherStatusCodes   = make(map[int]int)
 		requestsChan       = make(chan struct{}, concurrency)
 	)
 
@@ -61,14 +66,19 @@ func doLoadTest(url string, requests, concurrency int) (int, map[int]int) {
 			}
 			defer resp.Body.Close()
 
-			statusCodeCount[resp.StatusCode]++
 			if resp.StatusCode == http.StatusOK {
 				successfulRequests++
+			}
+
+			if _, ok := statusCodeCount[resp.StatusCode]; ok {
+				statusCodeCount[resp.StatusCode]++
+			} else {
+				otherStatusCodes[resp.StatusCode] = 1
 			}
 		}()
 	}
 
 	wg.Wait()
 
-	return successfulRequests, statusCodeCount
+	return successfulRequests, statusCodeCount, otherStatusCodes
 }
